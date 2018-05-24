@@ -38,8 +38,8 @@ Ext.define('CustomApp', {
 				ready: function(combobox) {
 					console.log('ready: ', combobox);
 				},
-				select: function(combobox, records, opts) {
-					console.log('select:', records.length);
+				select: function(combobox, records) {
+					console.log('comobo size:', records.length);
 
 					var reportStore = Ext.create('Ext.data.JsonStore', {
 						fields: ['milestonename', 
@@ -56,42 +56,28 @@ Ext.define('CustomApp', {
 					this.myMask.show();
 					var promises = [];
 
-					for (var i = 0; i < records.length ; i++) {
+
+					for (var j = 0; j < records.length ; j++) {
 
 						var deferred = Ext.create('Deft.Deferred');
 
-						promises.push(deferred);
-							this._assignInitValues(records, i).then({
-								success: function() {
-									return this._loadStories();
-								},
-								scope: this
-							}).then({
-								success: function() {
-									return this._loadDefects();
-								},
-								scope: this
-							}).then({
-								success: function() {
-									return this._loadTestSets();
-								},
-								scope: this
-							}).then({
-								success: function() {
-									reportStore.add(this._getStoreData());
+						var i = j;
+						var milestoneId = records[i].get('ObjectID');
+						var milestoneName = records[i].get('Name');
+						var targetDate = records[i].get('TargetDate');
+						this._createDataCall(milestoneName, milestoneId, targetDate, deferred, this);
 
-									console.log('report loaded:', reportStore);
-									return deferred.resolve();
-								},
-								scope: this
-							});
+						promises.push(
+							deferred
+						);
 					}
 
 					Deft.Promise.all(promises).then( {
-						success: function() {
+						success: function(records) {
+							reportStore.add(records);
 
 							console.log('creating grid');
-							console.log('report store:', reportStore);
+							//console.log('report store:', reportStore);
 
 							var grid = Ext.create('Ext.grid.Panel', {
 							height: 350,
@@ -175,45 +161,138 @@ Ext.define('CustomApp', {
 		this.add(mainPanel);
 	},
 
-	_assignInitValues: function(records, i) {
-		var deferred = Ext.create('Deft.Deferred');
 
-		console.log('select:', records[i].get('ObjectID'));
-		console.log('select:', records[i].get('Name'));
+	_createDataCall: function(milestoneName, milestoneId, targetDate, deferred, that) {
+		function DataCall() {
+			this.milestoneName = milestoneName;
+			this.milestoneId = milestoneId;
+			this.deferred = deferred;
+			this.that = that;
 
-		this.milestoneId = records[i].get('ObjectID');
+			this.execute = function() {
+				console.log('executing call:', milestoneName, milestoneName, targetDate);
 
-		this.milestoneName = records[i].get('Name');
-		this.targetDate = records[i].get('TargetDate');
+				this._loadStories(milestoneId).then({
+					success: function() {
+						return this._loadDefects(milestoneId);
+					}, scope: this
+				}).then({
+					success: function() {
+						return this._loadTestSets(milestoneId);
+					}, scope: this
+				}).then({
+					success: function() {
+						//console.log('report loaded:', this.stories, this.defects, this.testSets);
+						return deferred.resolve(that._getStoreData(milestoneName, targetDate, this.stories, this.defects, this.testSets));
+					}, scope: this
+				});
+			},
 
-		setTimeout(function afterTwoSeconds() {
-			deferred.resolve();
-		}, 500)
+
+			this._loadStories = function(milestoneId) {
+				console.log('loading stories:', milestoneId);
+				var deferred = Ext.create('Deft.Deferred');
+
+				var storiesStore = Ext.create('Rally.data.WsapiDataStore', {
+					model: 'HierarchicalRequirement',
+					fetch: ['FormattedID', 'Name', 'ObjectID', 'ScheduleState', 'PlanEstimate', 'Blocked'],
+					filters: [{
+						property: 'PortfolioItem.Milestones',
+						operator: 'contains',
+						value: "/milestone/" + milestoneId
+					}],
+					limit: Infinity
+				});
+
+				storiesStore.load().then({
+					success: function(records) {
+						this.stories = records;
+						//console.log('Stories:', records);
+						deferred.resolve(records);
+
+					},
+					scope: this
+				});
+
+				return deferred.promise;
+			},
 
 
-		
-		return deferred.promise;
+			this._loadDefects = function(milestoneId) {
+				console.log('loading defects:', milestoneId);
+				var deferred = Ext.create('Deft.Deferred');
+				var defectsStore = Ext.create('Rally.data.WsapiDataStore', {
+					model: 'Defect',
+					fetch: ['FormattedID', 'Name', 'ObjectID', 'ScheduleState', 'PlanEstimate', 'Blocked'],
+					filters: [{
+						property: 'Milestones',
+						operator: 'contains',
+						value: "/milestone/" + milestoneId
+					}],
+					limit: Infinity
+				});
+
+				defectsStore.load().then({
+					success: function(records) {
+						this.defects = records;
+						//console.log('Defects:', records);
+						deferred.resolve(records);
+
+					},
+					scope: this
+				});
+				return deferred.promise;
+			},
+
+
+			this._loadTestSets = function(milestoneId) {
+				console.log('loading testSets:', milestoneId);
+				var deferred = Ext.create('Deft.Deferred');
+				var testStore = Ext.create('Rally.data.WsapiDataStore', {
+					model: 'TestSet',
+					fetch: ['FormattedID', 'Name', 'ObjectID', 'ScheduleState', 'PlanEstimate', 'Blocked'],
+					filters: [{
+						property: 'Milestones',
+						operator: 'contains',
+						value: "/milestone/" + milestoneId
+					}],
+					limit: Infinity
+				});
+
+				testStore.load().then({
+					success: function(records) {
+						this.testSets = records;
+						//console.log('testStore:', records);
+						deferred.resolve(records);
+
+					},
+					scope: this
+				});
+				return deferred.promise;
+			};
+		}
+
+		var data = new DataCall(milestoneName, milestoneId, deferred, that);
+		data.execute();
 	},
 
 
-	_getStoreData: function() {
-		console.log('Milesone Name:', this.milestoneName);
-		console.log('Local stories:', this.stories);
-		console.log('Local defects:', this.defects);
-		console.log('Local testSets:', this.testSets);
+	_getStoreData: function(milestoneName, targetDate, stories, defects, testSets) {
+		//console.log('Milestone Name:', milestoneName);
+		//console.log('Local stories:', stories);
+		//console.log('Local defects:', defects);
+		//console.log('Local testSets:', testSets);
 
-		var percentComplete = this._calculatePercentComplete(this.stories, this.defects, this.testSets);
-		var storiesLeft = this._calculateStoriesLeft(this.stories, this.defects, this.testSets);
-		var totalPlanEstimate = this._calculateTotalPlanEstimate(this.stories, this.defects, this.testSets);
-		var storiesBlocked = this._calculateStoriesBlocked(this.stories, this.defects, this.testSets);
-		var totalPlanEstimateBlocked = this._calculateTotalPlanEstimateBlocked(this.stories, this.defects, this.testSets);
-		var storiesCompleted = this._calculateStoriesCompleted(this.stories, this.defects, this.testSets);
-		var totalPlanEstimateCompleted = this._calculateTotalPlanEstimateCompleted(this.stories, this.defects, this.testSets);
+		var percentComplete = this._calculatePercentComplete(stories, defects, testSets);
+		var storiesLeft = this._calculateStoriesLeft(stories, defects, testSets);
+		var totalPlanEstimate = this._calculateTotalPlanEstimate(stories, defects, testSets);
+		var storiesBlocked = this._calculateStoriesBlocked(stories, defects, testSets);
+		var totalPlanEstimateBlocked = this._calculateTotalPlanEstimateBlocked(stories, defects, testSets);
+		var storiesCompleted = this._calculateStoriesCompleted(stories, defects, testSets);
+		var totalPlanEstimateCompleted = this._calculateTotalPlanEstimateCompleted(stories, defects, testSets);
 
-		var targetDate = this.targetDate;
-
-		row = {
-			milestonename: this.milestoneName,
+		var row = {
+			milestonename: milestoneName,
 			percentComplete: percentComplete,
 			storiesLeft: storiesLeft,
 			totalPlanEstimate: totalPlanEstimate,
@@ -222,7 +301,7 @@ Ext.define('CustomApp', {
 			storiesCompleted: storiesCompleted,
 			totalPlanEstimateCompleted: totalPlanEstimateCompleted,
 			targetDate: targetDate
-		}
+		};
 
 		console.log('milestone row:', row);
 
@@ -236,7 +315,7 @@ Ext.define('CustomApp', {
 		var totalArtifactComplete = 0;
 
 		Ext.Array.each(stories, function(story) {
-			totalPlanEstimate += story.get('PlanEstimate')
+			totalPlanEstimate += story.get('PlanEstimate');
 
 			if ((story.get('ScheduleState') == 'Ready to Ship') || (story.get('ScheduleState') == 'Accepted')) {
 				totalArtifactComplete += story.get('PlanEstimate');
@@ -244,7 +323,7 @@ Ext.define('CustomApp', {
 		});
 
 		Ext.Array.each(defects, function(defect) {
-			totalPlanEstimate += defect.get('PlanEstimate')
+			totalPlanEstimate += defect.get('PlanEstimate');
 
 			if ((defect.get('ScheduleState') == 'Ready to Ship') || (defect.get('ScheduleState') == 'Accepted')) {
 				totalArtifactComplete += defect.get('PlanEstimate');
@@ -252,7 +331,7 @@ Ext.define('CustomApp', {
 		});
 
 		Ext.Array.each(testSets, function(testSet) {
-			totalPlanEstimate += testSet.get('PlanEstimate')
+			totalPlanEstimate += testSet.get('PlanEstimate');
 
 			if ((testSet.get('ScheduleState') == 'Ready to Ship') || (testSet.get('ScheduleState') == 'Accepted')) {
 				totalArtifactComplete += testSet.get('PlanEstimate');
@@ -261,7 +340,16 @@ Ext.define('CustomApp', {
 
 		console.log('total plan estimate:', totalPlanEstimate);
 		console.log('total artifact complete:', totalArtifactComplete);
-		return Math.floor((totalArtifactComplete / totalPlanEstimate) * 100) + '%' ;
+
+		var result;
+
+		if (totalPlanEstimate != 0) {
+			result = Math.floor((totalArtifactComplete / totalPlanEstimate) * 100) + '%';
+		} else {
+			result = 'N/A';
+		}
+
+		return result;
 	},
 
 
@@ -270,19 +358,19 @@ Ext.define('CustomApp', {
 
 		Ext.Array.each(stories, function(story) {
 			if ((story.get('ScheduleState') != 'Ready to Ship') && (story.get('ScheduleState') != 'Accepted')) {
-				totalLeft +=1
+				totalLeft +=1;
 			}
 		});
 
 		Ext.Array.each(defects, function(defect) {
 			if ((defect.get('ScheduleState') != 'Ready to Ship') && (defect.get('ScheduleState') != 'Accepted')) {
-				totalLeft +=1
+				totalLeft +=1;
 			}
 		});
 
 		Ext.Array.each(testSets, function(testSet) {
 			if ((testSet.get('ScheduleState') != 'Ready to Ship') && (testSet.get('ScheduleState') != 'Accepted')) {
-				totalLeft +=1
+				totalLeft +=1;
 			}
 		});
 
@@ -320,19 +408,19 @@ Ext.define('CustomApp', {
 
 		Ext.Array.each(stories, function(story) {
 			if (story.get('Blocked')) {
-				totalBlocked +=1
+				totalBlocked +=1;
 			}
 		});
 
 		Ext.Array.each(defects, function(defect) {
 			if (defect.get('Blocked')) {
-				totalBlocked +=1
+				totalBlocked +=1;
 			}
 		});
 
 		Ext.Array.each(testSets, function(testSet) {
 			if (testSet.get('Blocked')) {
-				totalBlocked +=1
+				totalBlocked +=1;
 			}
 		});
 
@@ -370,19 +458,19 @@ Ext.define('CustomApp', {
 
 		Ext.Array.each(stories, function(story) {
 			if (story.get('ScheduleState') == 'Completed') {
-				totalCompleted +=1
+				totalCompleted +=1;
 			}
 		});
 
 		Ext.Array.each(defects, function(defect) {
 			if (defect.get('ScheduleState') == 'Completed') {
-				totalCompleted +=1
+				totalCompleted +=1;
 			}
 		});
 
 		Ext.Array.each(testSets, function(testSet) {
 			if (testSet.get('ScheduleState') == 'Completed') {
-				totalCompleted +=1
+				totalCompleted +=1;
 			}
 		});
 
@@ -414,83 +502,5 @@ Ext.define('CustomApp', {
 		return totalPlanEstimate;
 	},
 
-
-	_loadStories: function() {
-		var deferred = Ext.create('Deft.Deferred');
-
-		var storiesStore = Ext.create('Rally.data.WsapiDataStore', {
-			model: 'HierarchicalRequirement',
-			fetch: ['FormattedID', 'Name', 'ObjectID', 'ScheduleState', 'PlanEstimate', 'Blocked'],
-			filters: [{
-				property: 'PortfolioItem.Milestones',
-				operator: 'contains',
-				value: "/milestone/" + this.milestoneId
-			}],
-			limit: Infinity
-		});
-
-		storiesStore.load().then({
-			success: function(records) {
-				this.stories = records;
-				console.log('Stories:', records);
-				deferred.resolve(records);
-
-			},
-			scope: this
-		});
-
-		return deferred.promise;
-	},
-
-
-	_loadDefects: function() {
-		var deferred = Ext.create('Deft.Deferred');
-		var defectsStore = Ext.create('Rally.data.WsapiDataStore', {
-			model: 'Defect',
-			fetch: ['FormattedID', 'Name', 'ObjectID', 'ScheduleState', 'PlanEstimate', 'Blocked'],
-			filters: [{
-				property: 'Milestones',
-				operator: 'contains',
-				value: "/milestone/" + this.milestoneId
-			}],
-			limit: Infinity
-		});
-
-		defectsStore.load().then({
-			success: function(records) {
-				this.defects = records;
-				console.log('Defects:', records);
-				deferred.resolve(records);
-
-			},
-			scope: this
-		});
-		return deferred.promise;
-	},
-
-
-	_loadTestSets: function() {
-		var deferred = Ext.create('Deft.Deferred');
-		var testStore = Ext.create('Rally.data.WsapiDataStore', {
-			model: 'TestSet',
-			fetch: ['FormattedID', 'Name', 'ObjectID', 'ScheduleState', 'PlanEstimate', 'Blocked'],
-			filters: [{
-				property: 'Milestones',
-				operator: 'contains',
-				value: "/milestone/" + this.milestoneId
-			}],
-			limit: Infinity
-		});
-
-		testStore.load().then({
-			success: function(records) {
-				this.testSets = records;
-				console.log('testStore:', records);
-				deferred.resolve(records);
-
-			},
-			scope: this
-		});
-		return deferred.promise;
-	}
+	
 });
