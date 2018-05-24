@@ -49,7 +49,9 @@ Ext.define('CustomApp', {
 								'blocked', 
 								'totalPlanBlocked', 
 								'storiesCompleted', 
-								'totalPlanEstimateCompleted', 
+								'totalPlanEstimateCompleted',
+								'defectsOpen', 
+								'totalPlanEstimateDefectsOpen',
 								'targetDate']
 					});					
 
@@ -122,6 +124,16 @@ Ext.define('CustomApp', {
 								width: 150,
 								sortable: true,
 								dataIndex: 'totalPlanEstimateCompleted'
+							}, {
+								text: '# Open Defects',
+								width: 110,
+								sortable: true,
+								dataIndex: 'defectsOpen'
+							}, {
+								text: 'Total plan estimate of Open Defects',
+								width: 190,
+								sortable: true,
+								dataIndex: 'totalPlanEstimateDefectsOpen'
 							}, {
 								text: 'Target date',
 								xtype: 'datecolumn',
@@ -290,6 +302,8 @@ Ext.define('CustomApp', {
 		var totalPlanEstimateBlocked = this._calculateTotalPlanEstimateBlocked(stories, defects, testSets);
 		var storiesCompleted = this._calculateStoriesCompleted(stories, defects, testSets);
 		var totalPlanEstimateCompleted = this._calculateTotalPlanEstimateCompleted(stories, defects, testSets);
+		var defectsOpen = this._calculateDefectsOpen(defects);
+		var totalPlanEstimateDefectsOpen = this._calculateTotalPlanEstimateDefectsOpen(defects);
 
 		var row = {
 			milestonename: milestoneName,
@@ -300,6 +314,8 @@ Ext.define('CustomApp', {
 			totalPlanBlocked: totalPlanEstimateBlocked,
 			storiesCompleted: storiesCompleted,
 			totalPlanEstimateCompleted: totalPlanEstimateCompleted,
+			defectsOpen: defectsOpen,
+			totalPlanEstimateDefectsOpen: totalPlanEstimateDefectsOpen,
 			targetDate: targetDate
 		};
 
@@ -496,6 +512,32 @@ Ext.define('CustomApp', {
 		Ext.Array.each(testSets, function(testSet) {
 			if (testSet.get('ScheduleState') == 'Completed') {
 				totalPlanEstimate += testSet.get('PlanEstimate');
+			}
+		});
+
+		return totalPlanEstimate;
+	},
+
+
+	_calculateDefectsOpen: function(defects) {
+		var totalOpen = 0;
+
+		Ext.Array.each(defects, function(defect) {
+			if ((defect.get('ScheduleState') != 'Completed') && (defect.get('ScheduleState') != 'Accepted') && (defect.get('ScheduleState') != 'Ready to Ship')) {
+				totalOpen +=1;
+			}
+		});
+
+		return totalOpen;
+	},
+
+
+	_calculateTotalPlanEstimateDefectsOpen: function(defects) {
+		var totalPlanEstimate = 0;
+
+		Ext.Array.each(defects, function(defect) {
+			if ((defect.get('ScheduleState') != 'Completed') && (defect.get('ScheduleState') != 'Accepted') && (defect.get('ScheduleState') != 'Ready to Ship')) {
+				totalPlanEstimate += defect.get('PlanEstimate');
 			}
 		});
 
