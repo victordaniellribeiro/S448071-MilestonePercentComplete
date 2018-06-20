@@ -76,7 +76,10 @@
 						var milestoneId = records[i].get('ObjectID');
 						var milestoneName = records[i].get('Name');
 						var targetDate = records[i].get('TargetDate');
-						this._createDataCall(milestoneName, milestoneId, targetDate, deferred, this);
+						var milestoneFormattedId = records[i].get('FormattedID');
+
+						console.log('Calling milestone: ', milestoneName, milestoneFormattedId);
+						this._createDataCall(project, milestoneName, milestoneId, targetDate, deferred, this);
 
 						promises.push(
 							deferred
@@ -85,6 +88,7 @@
 
 					Deft.Promise.all(promises).then( {
 						success: function(records) {
+							console.log('before assembling grid: ', records);
 							reportStore.add(records);
 
 							console.log('creating grid');
@@ -183,17 +187,18 @@
 	},
 
 
-	_createDataCall: function(milestoneName, milestoneId, targetDate, deferred, that) {
+	_createDataCall: function(projectId, milestoneName, milestoneId, targetDate, deferred, that) {
 		function DataCall() {
 			this.milestoneName = milestoneName;
 			this.milestoneId = milestoneId;
+			this.projectId = projectId;
 			this.deferred = deferred;
 			this.that = that;
 
 			this.execute = function() {
-				console.log('executing call:', milestoneName, milestoneName, targetDate);
+				console.log('executing call:', milestoneName, milestoneId, targetDate);
 
-				this._loadStories(milestoneId).then({
+				this._loadStories(projectId, milestoneId).then({
 					success: function() {
 						return this._loadDefects(milestoneId);
 					}, scope: this
@@ -210,12 +215,17 @@
 			},
 
 
-			this._loadStories = function(milestoneId) {
+			this._loadStories = function(projectId, milestoneId) {
 				console.log('loading stories:', milestoneId);
 				var deferred = Ext.create('Deft.Deferred');
 
 				var storiesStore = Ext.create('Rally.data.WsapiDataStore', {
 					model: 'HierarchicalRequirement',
+					context: {
+				        projectScopeUp: false,
+				        projectScopeDown: true,
+				        project: null //null to search all workspace
+				    },
 					fetch: ['FormattedID', 'Name', 'ObjectID', 'ScheduleState', 'PlanEstimate', 'Blocked'],
 					filters: [{
 						property: 'PortfolioItem.Milestones',
@@ -244,6 +254,11 @@
 				var deferred = Ext.create('Deft.Deferred');
 				var defectsStore = Ext.create('Rally.data.WsapiDataStore', {
 					model: 'Defect',
+					context: {
+				        projectScopeUp: false,
+				        projectScopeDown: true,
+				        project: null //null to search all workspace
+				    },
 					fetch: ['FormattedID', 'Name', 'ObjectID', 'ScheduleState', 'PlanEstimate', 'Blocked'],
 					filters: [{
 						property: 'Milestones',
@@ -271,6 +286,11 @@
 				var deferred = Ext.create('Deft.Deferred');
 				var testStore = Ext.create('Rally.data.WsapiDataStore', {
 					model: 'TestSet',
+					context: {
+				        projectScopeUp: false,
+				        projectScopeDown: true,
+				        project: null //null to search all workspace
+				    },
 					fetch: ['FormattedID', 'Name', 'ObjectID', 'ScheduleState', 'PlanEstimate', 'Blocked'],
 					filters: [{
 						property: 'Milestones',
