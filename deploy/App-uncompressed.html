@@ -10,6 +10,31 @@
                 Ext.define('CustomApp', {
 	extend: 'Rally.app.App',
 	componentCls: 'app',
+
+	_initDate: undefined,
+    _endDate: undefined,
+    _milestoneComboStore: undefined,
+    _milestoneComboBox: undefined,
+
+	items:[
+        {
+            xtype:'container',
+            itemId:'header',
+            cls:'header'
+        },
+        {
+            xtype:'container',
+            itemId:'bodyContainer',
+            layout: {
+		        type: 'hbox'
+		    },
+            width:'100%',
+            autoScroll:true
+        }
+    ],
+
+
+
 	launch: function() {
 		//Write app code here
 
@@ -36,12 +61,13 @@
 			target: mainPanel
 		});
 
-		var milestoneComboBox = Ext.create('Rally.ui.combobox.MilestoneComboBox', {
-			fieldLabel: 'Choose Milestone',
-			multiSelect: true,
-			width: 250,
+
+		this._milestoneComboBox = Ext.create('Rally.ui.combobox.MilestoneComboBox', {
 			itemId: 'milestoneComboBox',
+			fieldLabel: 'Choose Milestone',
 			allowClear: true,
+			multiSelect: true,
+			width: 300,
 			scope: this,
 			listeners: {
 				ready: function(combobox) {
@@ -172,18 +198,104 @@
 			}
 		});
 
-		var filterPanel = Ext.create('Ext.panel.Panel', {
+		this._milestoneComboStore = this._milestoneComboBox.getStore();
+
+		this.down('#header').add([
+		{
+			xtype: 'panel',
+			autoWidth: true,
+			//height: 120,
 			layout: 'hbox',
-			align: 'stretch',
-			padding: 5,
-			itemId: 'filterPanel',
-		});
 
-		filterPanel.add(milestoneComboBox);
+			items: [{
+				xtype: 'panel',
+				title: 'Choose date range for milestone:',
+				//width: 450,
+				//layout: 'fit',
+				flex: 3,
+				align: 'stretch',
+				autoHeight: true,
+				bodyPadding: 10,
+				items: [{
+					xtype: 'datefield',
+					anchor: '100%',
+			        fieldLabel: 'From',
+					scope: this,
+		        	listeners : {
+		        		change: function(picker, newDate, oldDate) {
+		        			this._initDate = newDate;
+		        			var that = this;
 
-		this.add(filterPanel);
+		        			//console.log('Store:', this._milestoneComboStore);
+		        			this._applyMilestoneRangeFilter(this._initDate, this._endDate, this._milestoneComboStore, that);
+		        		},
+		        		scope:this
+		        	}
+				}, {
+					xtype: 'datefield',
+					anchor: '100%',
+			        fieldLabel: 'To',
+					scope: this,
+		        	listeners : {
+		        		change: function(picker, newDate, oldDate) {
+		        			this._endDate = newDate;
+		        			var that = this;
+
+		        			//console.log('Store:', this._milestoneComboStore);
+		        			this._applyMilestoneRangeFilter(this._initDate, this._endDate, this._milestoneComboStore, that);
+		        		},
+		        		scope:this
+		        	}
+				},
+				{
+					xtype: 'fieldcontainer',
+					fieldLabel: 'Milestone',
+					pack: 'end',
+					labelAlign: 'left',
+					items: [
+						this._milestoneComboBox
+					]
+				}]
+			}]
+		}]);
 
 		this.add(mainPanel);
+	},
+
+
+	_applyMilestoneRangeFilter: function(initDate, endDate, store, scope) {
+		if (initDate && !endDate) {
+			this._milestoneComboStore.filterBy(function(record) {
+				if (record.get('TargetDate')) {
+					if (record.get('TargetDate').getTime() > initDate.getTime()) {
+						return record;
+					}
+				}
+			}, scope);
+
+		} else if (endDate && !initDate) {
+			this._milestoneComboStore.filterBy(function(record) {
+				if (record.get('TargetDate')) {
+					if (record.get('TargetDate').getTime() < endDate.getTime()) {
+						return record;
+					}
+				}
+			}, scope);
+		} else if (initDate && endDate) {
+			this._milestoneComboStore.filterBy(function(record) {
+				if (record.get('TargetDate')) {
+					if ((record.get('TargetDate').getTime() > initDate.getTime()) && 
+						(record.get('TargetDate').getTime() < endDate.getTime())) {
+						return record;
+					}
+				}
+			}, scope);
+		} else {
+			this._milestoneComboStore.filterBy(function(record) {				
+				return record;
+			});
+		}
+
 	},
 
 
