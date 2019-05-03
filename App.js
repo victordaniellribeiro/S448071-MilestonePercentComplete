@@ -61,8 +61,13 @@ Ext.define('CustomApp', {
 			width: 300,
 			scope: this,
 			listeners: {
+				afterrender: function(combobox) {
+					combobox.disable();
+				},
 				ready: function(combobox) {
 					console.log('ready: ', combobox);
+					combobox.refreshStore();
+					combobox.enable();
 				},
 				select: function(combobox, records) {
 					console.log('comobo size:', records.length);
@@ -238,6 +243,24 @@ Ext.define('CustomApp', {
 		        		scope:this
 		        	}
 				},
+				{					
+			        xtype: 'rallyfieldvaluecombobox',
+			        fieldLabel: 'Milestone Types',
+			        model: 'Milestone',
+			        field: 'c_Type',
+			        scope: this,
+			        listeners: {
+			        	change: function(combo) {
+							console.log('Milestone type: ', combo.getValue());
+							//console.log('store', this._milestoneComboStore);
+
+							this._milestoneType = combo.getValue();
+
+							this._applyMilestoneRangeFilter(this._initDate, this._endDate, this._milestoneComboStore, this, this._milestoneType);
+						},
+						scope: this
+			        }
+				},
 				{
 					xtype: 'fieldcontainer',
 					fieldLabel: 'Milestone',
@@ -251,11 +274,12 @@ Ext.define('CustomApp', {
 		}]);
 
 		this.add(mainPanel);
+		this._milestoneComboBox.select('');
 	},
 
 
-	_applyMilestoneRangeFilter: function(initDate, endDate, store, scope) {
-		if (initDate && !endDate) {
+	_applyMilestoneRangeFilter: function(initDate, endDate, store, scope, milestoneType) {
+		if (initDate && !endDate && !milestoneType) {
 			this._milestoneComboStore.filterBy(function(record) {
 				if (record.get('TargetDate')) {
 					if (record.get('TargetDate').getTime() > initDate.getTime()) {
@@ -264,7 +288,7 @@ Ext.define('CustomApp', {
 				}
 			}, scope);
 
-		} else if (endDate && !initDate) {
+		} else if (endDate && !initDate && !milestoneType) {
 			this._milestoneComboStore.filterBy(function(record) {
 				if (record.get('TargetDate')) {
 					if (record.get('TargetDate').getTime() < endDate.getTime()) {
@@ -272,11 +296,35 @@ Ext.define('CustomApp', {
 					}
 				}
 			}, scope);
-		} else if (initDate && endDate) {
+		} else if (initDate && endDate && !milestoneType) {
 			this._milestoneComboStore.filterBy(function(record) {
 				if (record.get('TargetDate')) {
 					if ((record.get('TargetDate').getTime() > initDate.getTime()) && 
 						(record.get('TargetDate').getTime() < endDate.getTime())) {
+						return record;
+					}
+				}
+			}, scope);
+		} else if (initDate && !endDate && milestoneType) {
+			this._milestoneComboStore.filterBy(function(record) {
+				if (record.get('TargetDate')) {
+					if (record.get('TargetDate').getTime() > initDate.getTime() &&
+						(record.get('c_Type') === this._milestoneType)) {
+						return record;
+					}
+				}
+			}, scope);
+		} else if (!initDate && !endDate && milestoneType) {
+			this._milestoneComboStore.filterBy(function(record) {
+				if (record.get('c_Type') && (record.get('c_Type') === this._milestoneType) ) {
+					return record;
+				}
+			}, scope);
+		} else if (endDate && !initDate && milestoneType) {
+			this._milestoneComboStore.filterBy(function(record) {
+				if (record.get('TargetDate')) {
+					if (record.get('TargetDate').getTime() < endDate.getTime() &&
+						(record.get('c_Type') === this._milestoneType)) {
 						return record;
 					}
 				}
@@ -465,7 +513,7 @@ Ext.define('CustomApp', {
 		Ext.Array.each(stories, function(story) {
 			totalPlanEstimate += story.get('PlanEstimate');
 
-			if ((story.get('ScheduleState') == 'Ready to Ship') || (story.get('ScheduleState') == 'Accepted')) {
+			if ((story.get('ScheduleState') === 'Ready to Ship') || (story.get('ScheduleState') === 'Accepted')) {
 				totalArtifactComplete += story.get('PlanEstimate');
 			}
 		});
@@ -473,7 +521,7 @@ Ext.define('CustomApp', {
 		Ext.Array.each(defects, function(defect) {
 			totalPlanEstimate += defect.get('PlanEstimate');
 
-			if ((defect.get('ScheduleState') == 'Ready to Ship') || (defect.get('ScheduleState') == 'Accepted')) {
+			if ((defect.get('ScheduleState') === 'Ready to Ship') || (defect.get('ScheduleState') === 'Accepted')) {
 				totalArtifactComplete += defect.get('PlanEstimate');
 			}
 		});
@@ -481,7 +529,7 @@ Ext.define('CustomApp', {
 		Ext.Array.each(testSets, function(testSet) {
 			totalPlanEstimate += testSet.get('PlanEstimate');
 
-			if ((testSet.get('ScheduleState') == 'Ready to Ship') || (testSet.get('ScheduleState') == 'Accepted')) {
+			if ((testSet.get('ScheduleState') === 'Ready to Ship') || (testSet.get('ScheduleState') === 'Accepted')) {
 				totalArtifactComplete += testSet.get('PlanEstimate');
 			}
 		});
@@ -505,19 +553,19 @@ Ext.define('CustomApp', {
 		var totalLeft = 0;
 
 		Ext.Array.each(stories, function(story) {
-			if ((story.get('ScheduleState') != 'Ready to Ship') && (story.get('ScheduleState') != 'Accepted')) {
+			if ((story.get('ScheduleState') !== 'Ready to Ship') && (story.get('ScheduleState') !== 'Accepted')) {
 				totalLeft +=1;
 			}
 		});
 
 		Ext.Array.each(defects, function(defect) {
-			if ((defect.get('ScheduleState') != 'Ready to Ship') && (defect.get('ScheduleState') != 'Accepted')) {
+			if ((defect.get('ScheduleState') !== 'Ready to Ship') && (defect.get('ScheduleState') !== 'Accepted')) {
 				totalLeft +=1;
 			}
 		});
 
 		Ext.Array.each(testSets, function(testSet) {
-			if ((testSet.get('ScheduleState') != 'Ready to Ship') && (testSet.get('ScheduleState') != 'Accepted')) {
+			if ((testSet.get('ScheduleState') !== 'Ready to Ship') && (testSet.get('ScheduleState') !== 'Accepted')) {
 				totalLeft +=1;
 			}
 		});
