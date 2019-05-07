@@ -279,6 +279,7 @@ Ext.define('CustomApp', {
 
 
 	_applyMilestoneRangeFilter: function(initDate, endDate, store, scope, milestoneType) {
+		//console.log(initDate, endDate, store, scope);
 		if (initDate && !endDate && !milestoneType) {
 			this._milestoneComboStore.filterBy(function(record) {
 				if (record.get('TargetDate')) {
@@ -314,16 +315,26 @@ Ext.define('CustomApp', {
 					}
 				}
 			}, scope);
+		} else if (!initDate && endDate && milestoneType) {
+			this._milestoneComboStore.filterBy(function(record) {
+				if (record.get('TargetDate')) {
+					if (record.get('TargetDate').getTime() < initDate.getTime() &&
+						(record.get('c_Type') === this._milestoneType)) {
+						return record;
+					}
+				}
+			}, scope);
 		} else if (!initDate && !endDate && milestoneType) {
 			this._milestoneComboStore.filterBy(function(record) {
 				if (record.get('c_Type') && (record.get('c_Type') === this._milestoneType) ) {
 					return record;
 				}
 			}, scope);
-		} else if (endDate && !initDate && milestoneType) {
+		} else if (endDate && initDate && milestoneType) {
 			this._milestoneComboStore.filterBy(function(record) {
 				if (record.get('TargetDate')) {
 					if (record.get('TargetDate').getTime() < endDate.getTime() &&
+						(record.get('TargetDate').getTime() > initDate.getTime()) &&
 						(record.get('c_Type') === this._milestoneType)) {
 						return record;
 					}
@@ -334,7 +345,6 @@ Ext.define('CustomApp', {
 				return record;
 			});
 		}
-
 	},
 
 
