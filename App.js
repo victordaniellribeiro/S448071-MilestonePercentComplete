@@ -58,6 +58,7 @@ Ext.define('CustomApp', {
 			fieldLabel: 'Choose Milestone',
 			allowClear: true,
 			multiSelect: true,
+			queryMode: 'local',
 			width: 300,
 			scope: this,
 			listeners: {
